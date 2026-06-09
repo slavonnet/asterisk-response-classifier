@@ -51,10 +51,3 @@ func (k *KeywordClassifier) Classify(text string) Result {
 func containsPhrase(text, phrase string) bool {
 	return strings.Contains(text, phrase)
 }
-
-// ProcessAudio accumulates ulaw frames; MVP returns uncertain until ONNX STT is wired.
-// Dialplan testing: send grammar hints via AEAP set params (future) or use external STT.
-func (k *KeywordClassifier) ProcessAudio(data []byte) Result {
-	_ = data
-	return Result{Text: string(Uncertain), Score: 0, Label: Uncertain}
-}

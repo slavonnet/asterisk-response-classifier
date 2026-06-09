@@ -1,63 +1,49 @@
-# Phrases and decision tree for outbound IVR robot
+# Универсальные фразы для любого да/нет-диалога.
+# Меняйте списки — arc перечитывает файл на каждый ответ (без перезапуска).
 
 phrases:
-  min_confidence: 0.65
+  min_confidence: 0.55
   positive:
     - "да"
+    - "да да"
+    - "ага"
+    - "угу"
     - "конечно"
     - "согласен"
+    - "согласна"
     - "хорошо"
+    - "ладно"
     - "давайте"
+    - "давай"
     - "подтверждаю"
+    - "верно"
+    - "правильно"
+    - "именно"
+    - "точно"
+    - "естественно"
+    - "разумеется"
+    - "без проблем"
+    - "ок"
+    - "окей"
+    - "yes"
   negative:
     - "нет"
+    - "неа"
+    - "не"
     - "не надо"
-    - "отказываюсь"
-    - "не интересно"
+    - "не нужно"
     - "не хочу"
-
-tree:
-  start: greeting
-  nodes:
-    - id: greeting
-      prompt: custom/greeting
-      timeout: 5
-      max_retry: 2
-      on:
-        positive: offer
-        negative: goodbye
-        uncertain: operator
-
-    - id: offer
-      prompt: custom/offer-details
-      timeout: 8
-      max_retry: 1
-      on:
-        positive: confirm
-        negative: goodbye
-        uncertain: operator
-
-    - id: confirm
-      prompt: custom/thank-you
-      on:
-        positive: hangup
-        negative: operator
-        uncertain: operator
-
-    - id: goodbye
-      prompt: custom/goodbye
-      on:
-        positive: hangup
-        negative: hangup
-        uncertain: hangup
-
-    - id: operator
-      prompt: custom/transfer-operator
-      on:
-        positive: hangup
-        negative: hangup
-        uncertain: hangup
-
-    - id: hangup
-      prompt: ""
-      on: {}
+    - "не интересно"
+    - "отказываюсь"
+    - "отказ"
+    - "никогда"
+    - "не согласен"
+    - "не согласна"
+    - "не буду"
+    - "не могу"
+    - "не удобно"
+    - "не сейчас"
+    - "потом"
+    - "занят"
+    - "занята"
+    - "no"

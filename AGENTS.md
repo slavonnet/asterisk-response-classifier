@@ -2,48 +2,34 @@
 
 ## Проект
 
-Классификатор ответов абонента для исходящего робота Asterisk: **positive / negative / uncertain**.
+Универсальный **да/нет** классификатор для Asterisk: `positive` | `negative` | `uncertain` → оператор.
+
+**Без дерева диалогов** — любой сценарий вызывает `Gosub(yesno-ask,s,1(prompt))`.
 
 ## Стек
 
-- **Go 1.22** — AEAP WebSocket-сервер (без C-модуля Asterisk)
-- **ONNX Runtime** — inference на CPU (Raspberry Pi / слабый сервер)
-- **Asterisk 18.12+ / 19.4+ / 21** — `SpeechCreate()` через `res_speech_aeap`
+- Go AEAP WebSocket → Asterisk `SpeechCreate(response-classifier)`
+- Vosk websocket STT (`alphacep/kaldi-ru`, порт 2700) — без CGO в `arc`
+- Keyword-классификация по `config/phrases.yaml` (hot-reload на каждый ответ)
 
-## Структура
-
-```
-cmd/arc/              — точка входа
-internal/aeap/        — AEAP speech_to_text протокол
-internal/classifier/  — positive/negative/uncertain
-internal/onnx/        — заглушка под ONNX STT
-internal/config/      — phrases.yaml
-config/               — фразы и дерево решений
-asterisk/             — aeap.conf, extensions.conf.example
-```
-
-## Сборка
+## Запуск
 
 ```bash
-go build -o bin/arc ./cmd/arc
-./bin/arc -port 9099 -config config/phrases.yaml
+docker run -d -p 2700:2700 alphacep/kaldi-ru:latest
+./arc -port 9099 -config config/phrases.yaml -vosk-url=ws://127.0.0.1:2700
 ```
-
-На Linux ARM (Pi): положить `libonnxruntime.so` рядом или в `/usr/lib`.
-
-## ONNX в Go
-
-Нужен только **wrapper** `github.com/yalue/onnxruntime_go` + **готовый** `libonnxruntime.so`.
-Компиляция C++ не требуется — линкуется prebuilt библиотека через CGO.
-
-## Следующие шаги
-
-1. Подключить ONNX STT (phrase-limited, по аналогии с speech-to-phrase)
-2. Добавить ulaw→PCM декодер перед inference
-3. Обучить/экспортировать маленькую модель под фиксированный набор фраз
-4. Systemd unit для `arc` на сервере с Asterisk
 
 ## Dialplan
 
-`SPEECH_TEXT(0)` → `positive` | `negative` | `uncertain`
-При `uncertain` — перевод на оператора (см. `asterisk/extensions.conf.example`).
+```
+Gosub(yesno-ask,s,1(custom/question))
+GotoIf($["${GOSUB_RETVAL}" = "uncertain"]?operator)
+```
+
+## Правка фраз (фаза 3)
+
+Редактировать `config/phrases.yaml` — перезапуск **не нужен**.
+
+## CI
+
+GitHub Actions: test + linux amd64/arm64/armv7. Локальный Go не нужен.

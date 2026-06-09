@@ -1,61 +1,51 @@
-; Outbound robot IVR with 3-way response classification
-; Engine: response-classifier (see aeap.conf)
+; Универсальный да/нет для любого диалога
+; SPEECH_TEXT(0) → positive | negative | uncertain
 ;
-; SPEECH_TEXT(0) returns: positive | negative | uncertain
-; uncertain -> Queue(operator) or Dial(SIP/operator)
+; Использование в своём сценарии:
+;   same => n,Gosub(yesno-ask,s,1(custom/my-question))
+;   same => n,GotoIf($["${GOSUB_RETVAL}" = "positive"]?...
+;   same => n,GotoIf($["${GOSUB_RETVAL}" = "negative"]?...
+;   same => n,Goto(operator)    ; uncertain
 
-[robot-outbound]
-exten => s,1,NoOp(=== Robot outbound call ===)
- same => n,Answer()
- same => n,Set(TREE_NODE=greeting)
- same => n,Goto(robot-outbound,run,1)
-
-exten => run,1,NoOp(Current node: ${TREE_NODE})
- same => n,GotoIf($["${TREE_NODE}" = "hangup"]?bye)
- same => n,GotoIf($["${TREE_NODE}" = "operator"]?to-operator)
- same => n,Set(PROMPT=${IF($["${TREE_NODE}" = "greeting"]?custom/greeting:${IF($["${TREE_NODE}" = "offer"]?custom/offer-details:${IF($["${TREE_NODE}" = "confirm"]?custom/thank-you:custom/goodbye)})})})
+[yesno-ask]
+; ARG1 = sound file (без расширения)
+exten => s,1,NoOp(=== Yes/No ask: ${ARG1} ===)
  same => n,SpeechCreate(response-classifier)
  same => n,SpeechStart()
- same => n,SpeechBackground(${PROMPT},5)
- same => n,Set(RESPONSE=${SPEECH_TEXT(0)})
+ same => n,SpeechBackground(${ARG1},8)
+ same => n,Set(GOSUB_RETVAL=${SPEECH_TEXT(0)})
+ same => n,Verbose(0,YesNo result: ${GOSUB_RETVAL} score=${SPEECH_SCORE(0)})
  same => n,SpeechDestroy()
- same => n,NoOp(Recognized: ${RESPONSE})
- ; --- decision tree routing ---
- same => n,GotoIf($["${RESPONSE}" = "positive"]?node-positive)
- same => n,GotoIf($["${RESPONSE}" = "negative"]?node-negative)
- same => n,Goto(robot-outbound,to-operator,1)
+ same => n,Return(${GOSUB_RETVAL})
 
-exten => run,n(node-positive),NoOp(Positive at ${TREE_NODE})
- same => n,GotoIf($["${TREE_NODE}" = "greeting"]?set-offer)
- same => n,GotoIf($["${TREE_NODE}" = "offer"]?set-confirm)
- same => n,GotoIf($["${TREE_NODE}" = "confirm"]?bye)
- same => n,Goto(bye)
+[robot-outbound]
+; Пример: три вопроса подряд, uncertain → оператор
+exten => s,1,Answer()
+ same => n,Gosub(yesno-ask,s,1(custom/greeting))
+ same => n,GotoIf($["${GOSUB_RETVAL}" = "uncertain"]?operator)
+ same => n,GotoIf($["${GOSUB_RETVAL}" = "negative"]?goodbye)
 
- same => n(set-offer),Set(TREE_NODE=offer)
- same => n,Goto(robot-outbound,run,1)
+ same => n,Gosub(yesno-ask,s,1(custom/offer))
+ same => n,GotoIf($["${GOSUB_RETVAL}" = "uncertain"]?operator)
+ same => n,GotoIf($["${GOSUB_RETVAL}" = "negative"]?goodbye)
 
- same => n(set-confirm),Set(TREE_NODE=confirm)
- same => n,Goto(robot-outbound,run,1)
+ same => n,Gosub(yesno-ask,s,1(custom/confirm))
+ same => n,GotoIf($["${GOSUB_RETVAL}" = "uncertain"]?operator)
+ same => n,GotoIf($["${GOSUB_RETVAL}" = "negative"]?operator)
+ same => n,Goto(thankyou)
 
-exten => run,n(node-negative),NoOp(Negative at ${TREE_NODE})
- same => n,GotoIf($["${TREE_NODE}" = "greeting"]?bye)
- same => n,Goto(robot-outbound,to-operator,1)
+exten => thankyou,1,Playback(custom/thank-you)
+ same => n,Hangup()
 
-exten => to-operator,1,NoOp(Transfer to operator — uncertain or negative on confirm)
- same => n,Playback(custom/transfer-operator)
+exten => goodbye,1,Playback(custom/goodbye)
+ same => n,Hangup()
+
+exten => operator,1,Playback(custom/transfer-operator)
  same => n,Queue(support,t,,,120)
  same => n,Hangup()
 
-exten => bye,1,NoOp(Goodbye)
- same => n,Playback(custom/goodbye)
- same => n,Hangup()
-
-; Test extension
-exten => 550,1,NoOp(AEAP speech test)
- same => n,Answer()
- same => n,SpeechCreate(response-classifier)
- same => n,SpeechStart()
- same => n,SpeechBackground(hello-world,5)
- same => n,Verbose(0,Result: ${SPEECH_TEXT(0)} score=${SPEECH_SCORE(0)})
- same => n,SpeechDestroy()
+; Тест AEAP
+exten => 550,1,Answer()
+ same => n,Gosub(yesno-ask,s,1(hello-world))
+ same => n,Verbose(0,Test: ${GOSUB_RETVAL})
  same => n,Hangup()

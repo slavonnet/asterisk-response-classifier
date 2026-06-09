@@ -13,13 +13,6 @@ func TestLoad(t *testing.T) {
 phrases:
   positive: ["да"]
   negative: ["нет"]
-tree:
-  start: greeting
-  nodes:
-    - id: greeting
-      prompt: test
-      on:
-        positive: next
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -32,10 +25,24 @@ tree:
 	if len(cfg.Phrases.Positive) != 1 || cfg.Phrases.Positive[0] != "да" {
 		t.Fatalf("positive phrases: %+v", cfg.Phrases.Positive)
 	}
-	if cfg.Phrases.MinConfidence != 0.6 {
-		t.Fatalf("default min_confidence = %v, want 0.6", cfg.Phrases.MinConfidence)
+	if cfg.Phrases.MinConfidence != 0.55 {
+		t.Fatalf("default min_confidence = %v, want 0.55", cfg.Phrases.MinConfidence)
 	}
-	if cfg.Tree.Start != "greeting" {
-		t.Fatalf("tree.start = %q", cfg.Tree.Start)
+}
+
+func TestLoaderReload(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "phrases.yaml")
+	if err := os.WriteFile(path, []byte("phrases:\n  positive: [\"да\"]\n  negative: [\"нет\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewLoader(path)
+	cfg1, _ := loader.Load()
+	if err := os.WriteFile(path, []byte("phrases:\n  positive: [\"ага\"]\n  negative: [\"нет\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg2, _ := loader.Load()
+	if cfg1.Phrases.Positive[0] == cfg2.Phrases.Positive[0] {
+		t.Fatal("expected reloaded config to differ")
 	}
 }

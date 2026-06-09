@@ -11,9 +11,10 @@ const (
 
 // Result holds recognition output for AEAP.
 type Result struct {
-	Text  string  // raw recognized phrase (or label for dialplan)
-	Score float64 // confidence 0..100
-	Label Label
+	Text       string  // label for dialplan: positive|negative|uncertain
+	Score      float64 // confidence 0..100
+	Label      Label
+	Transcript string // raw STT text (logs/debug)
 }
 
 // Classifier maps recognized speech to a decision label.

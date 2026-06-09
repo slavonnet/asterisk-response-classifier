@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -12,22 +13,24 @@ type PhraseGroups struct {
 	MinConfidence float64  `yaml:"min_confidence"`
 }
 
-type TreeNode struct {
-	ID       string            `yaml:"id"`
-	Prompt   string            `yaml:"prompt"`   // sound file or TTS key
-	On       map[string]string `yaml:"on"`       // positive|negative|uncertain -> next node id or action
-	Timeout  int               `yaml:"timeout"`  // seconds
-	MaxRetry int               `yaml:"max_retry"`
-}
-
-type DecisionTree struct {
-	Start string     `yaml:"start"`
-	Nodes []TreeNode `yaml:"nodes"`
-}
-
 type Config struct {
 	Phrases PhraseGroups `yaml:"phrases"`
-	Tree    DecisionTree `yaml:"tree"`
+}
+
+// Loader reloads phrases.yaml on every read (phase 3 — правка скрипта без рестарта).
+type Loader struct {
+	path string
+	mu   sync.Mutex
+}
+
+func NewLoader(path string) *Loader {
+	return &Loader{path: path}
+}
+
+func (l *Loader) Load() (*Config, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return Load(l.path)
 }
 
 func Load(path string) (*Config, error) {
@@ -40,7 +43,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	if cfg.Phrases.MinConfidence == 0 {
-		cfg.Phrases.MinConfidence = 0.6
+		cfg.Phrases.MinConfidence = 0.55
 	}
 	return &cfg, nil
 }
