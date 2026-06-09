@@ -38,7 +38,8 @@ jobs:
         run: |
           curl -fsSL "https://github.com/alphacep/vosk-api/releases/download/v${VOSK_VER}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}.zip" -o vosk.zip
           unzip vosk.zip
-          sudo cp vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so /usr/local/lib/
+          echo "VOSK_DIR=${{ github.workspace }}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}" >> "$GITHUB_ENV"
+          sudo cp "vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so" /usr/local/lib/
           sudo ldconfig
 
       - name: Download speech model (bundled in release, no server setup)
@@ -53,6 +54,8 @@ jobs:
       - name: Build arc
         env:
           CGO_ENABLED: "1"
+          CGO_CPPFLAGS: -I${{ env.VOSK_DIR }}
+          CGO_LDFLAGS: -L${{ env.VOSK_DIR }}
           VERSION: ${{ github.ref_name }}
         run: |
           go mod tidy
@@ -66,7 +69,7 @@ jobs:
         run: |
           mkdir -p bundle/{lib,config,model}
           cp arc bundle/arc
-          cp vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so bundle/lib/
+          cp "${VOSK_DIR}/libvosk.so" bundle/lib/
           cp -r model/* bundle/model/
           cp config/phrases.yaml bundle/config/
           cp deploy/arc.service bundle/
