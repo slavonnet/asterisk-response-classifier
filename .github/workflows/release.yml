@@ -33,6 +33,8 @@ jobs:
           cache: true
 
       - name: Install libvosk
+        env:
+          VOSK_ARCH: ${{ matrix.vosk_arch }}
         run: |
           curl -fsSL "https://github.com/alphacep/vosk-api/releases/download/v${VOSK_VER}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}.zip" -o vosk.zip
           unzip vosk.zip
