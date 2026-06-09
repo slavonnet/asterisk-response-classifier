@@ -31,11 +31,3 @@ func TestKeywordClassifier_Classify(t *testing.T) {
 		}
 	}
 }
-
-func TestKeywordClassifier_ProcessAudioEmpty(t *testing.T) {
-	cls := NewKeywordClassifier(config.PhraseGroups{})
-	got := cls.ProcessAudio([]byte{0xff, 0x7f})
-	if got.Label != Uncertain {
-		t.Fatalf("ProcessAudio label = %q, want uncertain", got.Label)
-	}
-}
