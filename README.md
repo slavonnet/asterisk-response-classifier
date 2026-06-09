@@ -2,91 +2,69 @@
 
 [![CI](https://github.com/slavonnet/asterisk-response-classifier/actions/workflows/ci.yml/badge.svg)](https://github.com/slavonnet/asterisk-response-classifier/actions/workflows/ci.yml)
 
-Локальный **да/нет** классификатор для исходящего робота Asterisk.  
-CPU-only, без GPU: **Go + Vosk STT + AEAP**.
+**Один Go-сервис на том же сервере, где Asterisk.** Без Docker.
 
-## Что делает
+Распознаёт ответ абонента → `positive` | `negative` | `uncertain` (→ оператор).
 
-После любого вопроса робота ответ абонента → одна из меток:
+## Зачем Vosk?
 
-| Метка | Примеры | Действие |
-|-------|---------|----------|
-| `positive` | да, ага, конечно, хорошо | ваша ветка «да» |
-| `negative` | нет, не надо, не интересно | ваша ветка «нет» |
-| `uncertain` | непонятно, тишина, постороннее | **оператор** |
+Asterisk отдаёт **звук**, а не текст. Нужен STT (speech-to-text), чтобы понять «да» или «нет».  
+Vosk — лёгкий офлайн-движок под CPU; встроен **внутрь `arc`** (один процесс, не отдельный сервис).
 
-**Дерево диалогов не нужно** — один макрос `yesno-ask` на любой вопрос.
+Цепочка: **звук → Vosk → текст → списки фраз → positive/negative/uncertain**.
 
-## Быстрый деплой (сегодня)
+## Запуск (3 команды)
 
-### 1. Vosk STT (Docker)
+На сервере с Asterisk:
 
 ```bash
-docker run -d --name vosk-ru --restart unless-stopped -p 2700:2700 alphacep/kaldi-ru:latest
+# 1. Модель речи (~50 MB, один раз)
+sudo bash scripts/download-model.sh /opt/asterisk-response-classifier/model
+
+# 2. libvosk + arc (из Release или dist/)
+sudo bash scripts/install.sh
+
+# 3. Asterisk — aeap.conf (файл asterisk/aeap.conf):
+# url=ws://127.0.0.1:9099
 ```
 
-### 2. arc (бинарник из [Releases](https://github.com/slavonnet/asterisk-response-classifier/releases) или CI)
+Или вручную:
 
 ```bash
-chmod +x arc-linux-arm64   # Pi
-./arc-linux-arm64 -port 9099 -config config/phrases.yaml -vosk-url=ws://127.0.0.1:2700
+export LD_LIBRARY_PATH=/opt/asterisk-response-classifier/lib
+/opt/asterisk-response-classifier/bin/arc \
+  -port 9099 \
+  -config /opt/asterisk-response-classifier/config/phrases.yaml \
+  -model /opt/asterisk-response-classifier/model
 ```
 
-Или всё сразу:
-
-```bash
-cd deploy && docker compose up -d
-```
-
-### 3. Asterisk
-
-`asterisk/aeap.conf`:
-
-```ini
-[response-classifier]
-type=client
-codecs=!all,ulaw
-url=ws://127.0.0.1:9099
-protocol=speech_to_text
-```
-
-Модули: `res_aeap`, `res_speech_aeap`.
-
-### 4. Dialplan — любой диалог
+## Dialplan
 
 ```asterisk
-same => n,Gosub(yesno-ask,s,1(custom/my-question))
-same => n,GotoIf($["${GOSUB_RETVAL}" = "positive"]?yes-branch)
-same => n,GotoIf($["${GOSUB_RETVAL}" = "negative"]?no-branch)
+same => n,Gosub(yesno-ask,s,1(custom/ваш-вопрос))
+same => n,GotoIf($["${GOSUB_RETVAL}" = "positive"]?yes)
+same => n,GotoIf($["${GOSUB_RETVAL}" = "negative"]?no)
 same => n,Goto(operator)    ; uncertain
 ```
 
-Полный пример: `asterisk/extensions.conf.example`. Тест: extension `550`.
+Пример: `asterisk/extensions.conf.example`.
 
-## Правка фраз без рестарта
+## Фразы
 
-`config/phrases.yaml` — списки `positive` / `negative`.  
-Файл перечитывается **на каждый ответ**. Меняете YAML → сразу работает.
+`config/phrases.yaml` — универсальные «да» / «нет». Перечитывается без рестарта.
 
-## Архитектура
-
-```
-Asterisk (ulaw) ──AEAP──► arc:9099 ──PCM──► Vosk:2700
-                              │
-                              └── keyword match → positive|negative|uncertain
-```
-
-## CI / релиз
-
-- Push в `main` → тесты + бинарники linux amd64/arm64/armv7
-- `git tag v0.2.0 && git push origin v0.2.0` → GitHub Release
-
-## Скрипт установки на Pi
+## Сборка на сервере (если Release без vosk)
 
 ```bash
-# положите arc-linux-arm64 в dist/
-bash scripts/install.sh
+# libvosk.so рядом или в /usr/local/lib
+go build -tags vosk -o arc ./cmd/arc
 ```
+
+Release-бинарники для linux собираются с `-tags vosk` и `libvosk.so` в комплекте.
+
+## CI / Releases
+
+https://github.com/slavonnet/asterisk-response-classifier/releases
 
 ## Лицензия
 

@@ -1,35 +1,28 @@
 # AGENTS.md
 
-## Проект
+## Суть
 
-Универсальный **да/нет** классификатор для Asterisk: `positive` | `negative` | `uncertain` → оператор.
+Один процесс `arc` на хосте Asterisk. **Без Docker.**
 
-**Без дерева диалогов** — любой сценарий вызывает `Gosub(yesno-ask,s,1(prompt))`.
-
-## Стек
-
-- Go AEAP WebSocket → Asterisk `SpeechCreate(response-classifier)`
-- Vosk websocket STT (`alphacep/kaldi-ru`, порт 2700) — без CGO в `arc`
-- Keyword-классификация по `config/phrases.yaml` (hot-reload на каждый ответ)
+- AEAP WebSocket `:9099` ← Asterisk `SpeechCreate(response-classifier)`
+- STT: Vosk in-process (`-model /path`, build `-tags vosk`)
+- Классификация: `config/phrases.yaml` (hot-reload)
 
 ## Запуск
 
 ```bash
-docker run -d -p 2700:2700 alphacep/kaldi-ru:latest
-./arc -port 9099 -config config/phrases.yaml -vosk-url=ws://127.0.0.1:2700
+LD_LIBRARY_PATH=/opt/asterisk-response-classifier/lib \
+  ./arc -port 9099 -config config/phrases.yaml -model /opt/.../model
 ```
 
 ## Dialplan
 
+`Gosub(yesno-ask,s,1(prompt))` → `GOSUB_RETVAL` = positive|negative|uncertain
+
+## Сборка с STT
+
+```bash
+go build -tags vosk -o arc ./cmd/arc
 ```
-Gosub(yesno-ask,s,1(custom/question))
-GotoIf($["${GOSUB_RETVAL}" = "uncertain"]?operator)
-```
 
-## Правка фраз (фаза 3)
-
-Редактировать `config/phrases.yaml` — перезапуск **не нужен**.
-
-## CI
-
-GitHub Actions: test + linux amd64/arm64/armv7. Локальный Go не нужен.
+Без `-tags vosk` — только тесты/CI, STT не работает.

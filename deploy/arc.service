@@ -1,14 +1,15 @@
 [Unit]
-Description=Asterisk Response Classifier (AEAP + Vosk)
-After=network.target docker.service asterisk.service
+Description=Asterisk Response Classifier (AEAP, in-process STT)
+After=network.target asterisk.service
 Wants=asterisk.service
 
 [Service]
 Type=simple
 User=asterisk
 Group=asterisk
-WorkingDirectory=/opt/asterisk-response-classifier
-ExecStart=/opt/asterisk-response-classifier/bin/arc -port 9099 -config /opt/asterisk-response-classifier/config/phrases.yaml -vosk-url=ws://127.0.0.1:2700
+WorkingDirectory=INSTALL_DIR
+Environment=LD_LIBRARY_PATH=INSTALL_DIR/lib
+ExecStart=INSTALL_DIR/bin/arc -port 9099 -config INSTALL_DIR/config/phrases.yaml -model MODEL_DIR
 Restart=on-failure
 RestartSec=3
 

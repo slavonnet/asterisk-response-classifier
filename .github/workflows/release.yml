@@ -10,20 +10,18 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - goos: linux
+          - runner: ubuntu-latest
             goarch: amd64
+            vosk_arch: x86_64
             asset: arc-linux-amd64
-          - goos: linux
+          - runner: ubuntu-24.04-arm
             goarch: arm64
+            vosk_arch: aarch64
             asset: arc-linux-arm64
-          - goos: linux
-            goarch: arm
-            goarm: "7"
-            asset: arc-linux-armv7
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,21 +30,31 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install libvosk
+        env:
+          VOSK_VER: "0.3.45"
+          VOSK_ARCH: ${{ matrix.vosk_arch }}
+        run: |
+          curl -fsSL "https://github.com/alphacep/vosk-api/releases/download/v${VOSK_VER}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}.zip" -o vosk.zip
+          unzip vosk.zip
+          sudo cp vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so /usr/local/lib/
+          sudo ldconfig
+          mkdir -p dist/lib
+          cp vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so dist/lib/
+
       - name: Test
         run: go test -count=1 ./...
 
-      - name: Build
+      - name: Build with vosk
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          GOARM: ${{ matrix.goarm }}
-          CGO_ENABLED: "0"
+          CGO_ENABLED: "1"
           VERSION: ${{ github.ref_name }}
         run: |
-          go build -trimpath \
+          go mod tidy
+          go build -tags vosk -trimpath \
             -ldflags="-s -w -X main.version=${VERSION}" \
             -o dist/${{ matrix.asset }} ./cmd/arc
-          cd dist && sha256sum ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+          cd dist && sha256sum ${{ matrix.asset }} lib/libvosk.so > ${{ matrix.asset }}.sha256
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -54,6 +62,7 @@ jobs:
           name: ${{ matrix.asset }}
           path: |
             dist/${{ matrix.asset }}
+            dist/lib/libvosk.so
             dist/${{ matrix.asset }}.sha256
 
   publish:
@@ -65,10 +74,24 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Pack tarballs
+        run: |
+          for bin in dist/arc-linux-*; do
+            [ -f "$bin" ] || continue
+            name=$(basename "$bin")
+            dir="dist/${name}-bundle"
+            mkdir -p "$dir/lib"
+            cp "$bin" "$dir/arc"
+            cp dist/lib/libvosk.so "$dir/lib/" 2>/dev/null || cp dist/lib/libvosk.so "$dir/lib/" || true
+            cp config/phrases.yaml "$dir/"
+            cp scripts/download-model.sh "$dir/"
+            tar -czf "dist/${name}.tar.gz" -C "$dir" .
+          done
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: dist/*
+          files: dist/*.tar.gz dist/arc-linux-* dist/*.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
