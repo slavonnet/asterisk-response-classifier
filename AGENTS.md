@@ -1,20 +1,18 @@
 # AGENTS.md
 
-## Принцип (как speech-to-phrase)
+## Задача
 
-Не open STT, а **распознавание из списка фраз** из `phrases.yaml`.
-Акустическая модель в `model/` (в Release). Грамматика — на лету из yaml.
+Короткий ulaw от Asterisk → `positive` | `negative` | `uncertain`.  
+**Без STT.** Сходство звука с эталонами в `config/references.yaml`.
 
-## Release bundle
+## Не делать
 
-`arc-linux-{amd64,arm64}.tar.gz` содержит: arc, libvosk.so, model/, config/, install.sh
+- STT / Vosk / Docker / текстовые фразы / ASR в этом сервисе
 
 ## Запуск
 
-```
-LD_LIBRARY_PATH=./lib ./arc -model ./model -config ./config/phrases.yaml
-```
+`./arc -port 9099 -config config/references.yaml`
 
-## Сборка
+## Эталоны
 
-`go build -tags vosk` — только для разработки; прод = tarball из CI.
+ulaw 8 kHz в `config/refs/`. Hot-reload yaml на каждый ответ.

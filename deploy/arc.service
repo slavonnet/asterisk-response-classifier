@@ -1,5 +1,5 @@
 [Unit]
-Description=Asterisk Response Classifier
+Description=Asterisk Response Classifier (audio similarity)
 After=network.target asterisk.service
 
 [Service]
@@ -7,8 +7,7 @@ Type=simple
 User=asterisk
 Group=asterisk
 WorkingDirectory=INSTALL_DIR
-Environment=LD_LIBRARY_PATH=INSTALL_DIR/lib
-ExecStart=INSTALL_DIR/arc -port 9099 -config INSTALL_DIR/config/phrases.yaml -model INSTALL_DIR/model
+ExecStart=INSTALL_DIR/arc -port 9099 -config INSTALL_DIR/config/references.yaml
 Restart=on-failure
 RestartSec=3
 

@@ -2,22 +2,25 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 
 	"gopkg.in/yaml.v3"
 )
 
-type PhraseGroups struct {
-	Positive      []string `yaml:"positive"`
-	Negative      []string `yaml:"negative"`
-	MinConfidence float64  `yaml:"min_confidence"`
+// References lists ulaw reference clips (positive / negative variants).
+type References struct {
+	Positive  []string `yaml:"positive"`
+	Negative  []string `yaml:"negative"`
+	MinScore  float64  `yaml:"min_score"`  // min cosine similarity 0..1
+	MinMargin float64  `yaml:"min_margin"` // pos_best - neg_best (or vice versa)
 }
 
 type Config struct {
-	Phrases PhraseGroups `yaml:"phrases"`
+	References References `yaml:"references"`
+	baseDir    string
 }
 
-// Loader reloads phrases.yaml on every read (phase 3 — правка скрипта без рестарта).
 type Loader struct {
 	path string
 	mu   sync.Mutex
@@ -42,8 +45,21 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
-	if cfg.Phrases.MinConfidence == 0 {
-		cfg.Phrases.MinConfidence = 0.55
+	if cfg.References.MinScore == 0 {
+		cfg.References.MinScore = 0.55
 	}
+	if cfg.References.MinMargin == 0 {
+		cfg.References.MinMargin = 0.08
+	}
+	cfg.baseDir = filepath.Dir(path)
 	return &cfg, nil
 }
+
+func (c *Config) Resolve(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(c.baseDir, path)
+}
+
+func (c *Config) BaseDir() string { return c.baseDir }

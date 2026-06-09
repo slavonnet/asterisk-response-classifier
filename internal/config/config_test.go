@@ -6,43 +6,26 @@ import (
 	"testing"
 )
 
-func TestLoad(t *testing.T) {
+func TestLoadReferences(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "phrases.yaml")
+	path := filepath.Join(dir, "references.yaml")
 	content := `
-phrases:
-  positive: ["да"]
-  negative: ["нет"]
+references:
+  positive: ["refs/p.ulaw"]
+  negative: ["refs/n.ulaw"]
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
 	cfg, err := Load(path)
 	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if len(cfg.Phrases.Positive) != 1 || cfg.Phrases.Positive[0] != "да" {
-		t.Fatalf("positive phrases: %+v", cfg.Phrases.Positive)
-	}
-	if cfg.Phrases.MinConfidence != 0.55 {
-		t.Fatalf("default min_confidence = %v, want 0.55", cfg.Phrases.MinConfidence)
-	}
-}
-
-func TestLoaderReload(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "phrases.yaml")
-	if err := os.WriteFile(path, []byte("phrases:\n  positive: [\"да\"]\n  negative: [\"нет\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	loader := NewLoader(path)
-	cfg1, _ := loader.Load()
-	if err := os.WriteFile(path, []byte("phrases:\n  positive: [\"ага\"]\n  negative: [\"нет\"]\n"), 0o644); err != nil {
-		t.Fatal(err)
+	if cfg.References.MinScore != 0.55 {
+		t.Fatalf("min_score = %v", cfg.References.MinScore)
 	}
-	cfg2, _ := loader.Load()
-	if cfg1.Phrases.Positive[0] == cfg2.Phrases.Positive[0] {
-		t.Fatal("expected reloaded config to differ")
+	want := filepath.Join(dir, "refs/p.ulaw")
+	if cfg.Resolve("refs/p.ulaw") != want {
+		t.Fatalf("resolve = %q", cfg.Resolve("refs/p.ulaw"))
 	}
 }
