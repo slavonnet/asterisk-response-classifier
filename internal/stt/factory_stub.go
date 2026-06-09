@@ -1,8 +1,10 @@
+//go:build !vosk
+
 package stt
 
 import "fmt"
 
-// NewEngine creates the STT backend. With -tags vosk links libvosk in-process (no Docker).
+// NewEngine creates the STT backend. With -tags vosk links libvosk in-process.
 func NewEngine(modelPath string) (Engine, error) {
 	if modelPath == "" {
 		return Noop{}, nil
