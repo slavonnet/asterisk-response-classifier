@@ -32,7 +32,8 @@ func (s *Service) ProcessAudio(ulaw []byte) Result {
 	}
 
 	pcm := audio.DecodeULaw(ulaw)
-	text, conf, err := s.stt.Transcribe(pcm, 8000)
+	phrases := append(append([]string{}, cfg.Phrases.Positive...), cfg.Phrases.Negative...)
+	text, conf, err := s.stt.Transcribe(pcm, 8000, phrases)
 	if err != nil {
 		log.Printf("stt: %v", err)
 		return Result{Text: string(Uncertain), Score: 0, Label: Uncertain}

@@ -2,70 +2,50 @@
 
 [![CI](https://github.com/slavonnet/asterisk-response-classifier/actions/workflows/ci.yml/badge.svg)](https://github.com/slavonnet/asterisk-response-classifier/actions/workflows/ci.yml)
 
-**Один Go-сервис на том же сервере, где Asterisk.** Без Docker.
+Один сервис на сервере Asterisk: **positive / negative / uncertain**.
 
-Распознаёт ответ абонента → `positive` | `negative` | `uncertain` (→ оператор).
+## Как speech-to-phrase (но проще)
 
-## Зачем Vosk?
+[speech-to-phrase](https://github.com/OHF-voice/speech-to-phrase) **не переобучает нейросеть**. Она:
 
-Asterisk отдаёт **звук**, а не текст. Нужен STT (speech-to-text), чтобы понять «да» или «нет».  
-Vosk — лёгкий офлайн-движок под CPU; встроен **внутрь `arc`** (один процесс, не отдельный сервис).
+1. Берёт **список известных фраз** (шаблоны + имена из HA)
+2. Собирает **грамматику** (Kaldi FST) — «какую из *моих* фраз сказали?»
+3. При новых сущностях HA **пересобирает грамматику** (секунды, не training с нуля)
 
-Цепочка: **звук → Vosk → текст → списки фраз → positive/negative/uncertain**.
+Здесь то же самое для да/нет:
 
-## Запуск (3 команды)
+| speech-to-phrase | arc |
+|------------------|-----|
+| Список фраз из HA | `config/phrases.yaml` |
+| Пересборка при изменениях | Грамматика Vosk пересоздаётся **на каждый ответ** из yaml |
+| Акустическая модель (скачана один раз) | `model/` **уже в Release** |
 
-На сервере с Asterisk:
+Открытый STT («что угодно сказал человек») не нужен — только ваши «да» и «нет».
 
-```bash
-# 1. Модель речи (~50 MB, один раз)
-sudo bash scripts/download-model.sh /opt/asterisk-response-classifier/model
-
-# 2. libvosk + arc (из Release или dist/)
-sudo bash scripts/install.sh
-
-# 3. Asterisk — aeap.conf (файл asterisk/aeap.conf):
-# url=ws://127.0.0.1:9099
-```
-
-Или вручную:
+## Установка с Release (всё в одном архиве)
 
 ```bash
-export LD_LIBRARY_PATH=/opt/asterisk-response-classifier/lib
-/opt/asterisk-response-classifier/bin/arc \
-  -port 9099 \
-  -config /opt/asterisk-response-classifier/config/phrases.yaml \
-  -model /opt/asterisk-response-classifier/model
+# скачать arc-linux-arm64.tar.gz (или amd64) из Releases
+sudo bash install.sh arc-linux-arm64.tar.gz
 ```
+
+Внутри tarball: `arc`, `lib/libvosk.so`, **`model/`**, `config/phrases.yaml`, systemd unit.  
+**На сервере ничего качать и переобучать не нужно.**
 
 ## Dialplan
 
 ```asterisk
-same => n,Gosub(yesno-ask,s,1(custom/ваш-вопрос))
+same => n,Gosub(yesno-ask,s,1(custom/вопрос))
 same => n,GotoIf($["${GOSUB_RETVAL}" = "positive"]?yes)
 same => n,GotoIf($["${GOSUB_RETVAL}" = "negative"]?no)
-same => n,Goto(operator)    ; uncertain
+same => n,Goto(operator)
 ```
 
-Пример: `asterisk/extensions.conf.example`.
+## Правка фраз
 
-## Фразы
+Редактируете `config/phrases.yaml` — списки `positive` / `negative`.  
+Перезапуск не нужен: на следующем ответе подхватится новая грамматика.
 
-`config/phrases.yaml` — универсальные «да» / «нет». Перечитывается без рестарта.
-
-## Сборка на сервере (если Release без vosk)
-
-```bash
-# libvosk.so рядом или в /usr/local/lib
-go build -tags vosk -o arc ./cmd/arc
-```
-
-Release-бинарники для linux собираются с `-tags vosk` и `libvosk.so` в комплекте.
-
-## CI / Releases
+## Releases
 
 https://github.com/slavonnet/asterisk-response-classifier/releases
-
-## Лицензия
-
-Apache-2.0

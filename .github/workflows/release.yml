@@ -8,17 +8,19 @@ on:
 permissions:
   contents: write
 
+env:
+  VOSK_MODEL_URL: https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+  VOSK_VER: "0.3.45"
+
 jobs:
   release:
     strategy:
       matrix:
         include:
           - runner: ubuntu-latest
-            goarch: amd64
             vosk_arch: x86_64
             asset: arc-linux-amd64
           - runner: ubuntu-24.04-arm
-            goarch: arm64
             vosk_arch: aarch64
             asset: arc-linux-arm64
     runs-on: ${{ matrix.runner }}
@@ -31,21 +33,22 @@ jobs:
           cache: true
 
       - name: Install libvosk
-        env:
-          VOSK_VER: "0.3.45"
-          VOSK_ARCH: ${{ matrix.vosk_arch }}
         run: |
           curl -fsSL "https://github.com/alphacep/vosk-api/releases/download/v${VOSK_VER}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}.zip" -o vosk.zip
           unzip vosk.zip
           sudo cp vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so /usr/local/lib/
           sudo ldconfig
-          mkdir -p dist/lib
-          cp vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so dist/lib/
+
+      - name: Download speech model (bundled in release, no server setup)
+        run: |
+          curl -fsSL "$VOSK_MODEL_URL" -o model.zip
+          unzip -q model.zip
+          mv vosk-model-small-ru-0.22 model
 
       - name: Test
         run: go test -count=1 ./...
 
-      - name: Build with vosk
+      - name: Build arc
         env:
           CGO_ENABLED: "1"
           VERSION: ${{ github.ref_name }}
@@ -53,17 +56,30 @@ jobs:
           go mod tidy
           go build -tags vosk -trimpath \
             -ldflags="-s -w -X main.version=${VERSION}" \
-            -o dist/${{ matrix.asset }} ./cmd/arc
-          cd dist && sha256sum ${{ matrix.asset }} lib/libvosk.so > ${{ matrix.asset }}.sha256
+            -o arc ./cmd/arc
 
-      - name: Upload build artifact
+      - name: Pack full bundle (binary + lib + model + config)
+        env:
+          VOSK_ARCH: ${{ matrix.vosk_arch }}
+        run: |
+          mkdir -p bundle/{lib,config,model}
+          cp arc bundle/arc
+          cp vosk-linux-${VOSK_ARCH}-${VOSK_VER}/libvosk.so bundle/lib/
+          cp -r model/* bundle/model/
+          cp config/phrases.yaml bundle/config/
+          cp deploy/arc.service bundle/
+          cp scripts/install-from-release.sh bundle/install.sh
+          chmod +x bundle/arc bundle/install.sh
+          tar -czf ${{ matrix.asset }}.tar.gz -C bundle .
+          sha256sum ${{ matrix.asset }}.tar.gz > ${{ matrix.asset }}.tar.gz.sha256
+
+      - name: Upload tarball
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
           path: |
-            dist/${{ matrix.asset }}
-            dist/lib/libvosk.so
-            dist/${{ matrix.asset }}.sha256
+            ${{ matrix.asset }}.tar.gz
+            ${{ matrix.asset }}.tar.gz.sha256
 
   publish:
     runs-on: ubuntu-latest
@@ -74,24 +90,10 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Pack tarballs
-        run: |
-          for bin in dist/arc-linux-*; do
-            [ -f "$bin" ] || continue
-            name=$(basename "$bin")
-            dir="dist/${name}-bundle"
-            mkdir -p "$dir/lib"
-            cp "$bin" "$dir/arc"
-            cp dist/lib/libvosk.so "$dir/lib/" 2>/dev/null || cp dist/lib/libvosk.so "$dir/lib/" || true
-            cp config/phrases.yaml "$dir/"
-            cp scripts/download-model.sh "$dir/"
-            tar -czf "dist/${name}.tar.gz" -C "$dir" .
-          done
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: dist/*.tar.gz dist/arc-linux-* dist/*.sha256
+          files: dist/*.tar.gz dist/*.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

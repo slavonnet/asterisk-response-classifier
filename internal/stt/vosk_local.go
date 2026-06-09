@@ -10,7 +10,8 @@ import (
 	vosk "github.com/alphacep/vosk-api/go"
 )
 
-// VoskLocal runs speech recognition inside the arc process (same host as Asterisk).
+// VoskLocal: base acoustic model + phrase grammar rebuilt from phrases.yaml each utterance.
+// Same idea as speech-to-phrase (limited vocabulary), not open-ended STT.
 type VoskLocal struct {
 	model *vosk.VoskModel
 	mu    sync.Mutex
@@ -25,15 +26,23 @@ func NewVoskLocal(modelPath string) (*VoskLocal, error) {
 	return &VoskLocal{model: model}, nil
 }
 
-func (v *VoskLocal) Transcribe(pcm []byte, sampleRate int) (string, float64, error) {
+func (v *VoskLocal) Transcribe(pcm []byte, sampleRate int, phrases []string) (string, float64, error) {
 	if len(pcm) == 0 {
 		return "", 0, nil
+	}
+	if len(phrases) == 0 {
+		return "", 0, fmt.Errorf("empty phrase list")
+	}
+
+	grammar, err := json.Marshal(phrases)
+	if err != nil {
+		return "", 0, err
 	}
 
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	rec, err := vosk.NewRecognizer(v.model, float64(sampleRate))
+	rec, err := vosk.NewRecognizerGrm(v.model, float64(sampleRate), string(grammar))
 	if err != nil {
 		return "", 0, err
 	}
@@ -51,7 +60,7 @@ func (v *VoskLocal) Transcribe(pcm []byte, sampleRate int) (string, float64, err
 	if text == "" {
 		return "", 0, nil
 	}
-	return text, 0.85, nil
+	return text, 0.9, nil
 }
 
 func (v *VoskLocal) Close() {

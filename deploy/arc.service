@@ -1,7 +1,6 @@
 [Unit]
-Description=Asterisk Response Classifier (AEAP, in-process STT)
+Description=Asterisk Response Classifier
 After=network.target asterisk.service
-Wants=asterisk.service
 
 [Service]
 Type=simple
@@ -9,7 +8,7 @@ User=asterisk
 Group=asterisk
 WorkingDirectory=INSTALL_DIR
 Environment=LD_LIBRARY_PATH=INSTALL_DIR/lib
-ExecStart=INSTALL_DIR/bin/arc -port 9099 -config INSTALL_DIR/config/phrases.yaml -model MODEL_DIR
+ExecStart=INSTALL_DIR/arc -port 9099 -config INSTALL_DIR/config/phrases.yaml -model INSTALL_DIR/model
 Restart=on-failure
 RestartSec=3
 

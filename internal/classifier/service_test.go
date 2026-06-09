@@ -12,7 +12,7 @@ type mockSTT struct {
 	text string
 }
 
-func (m mockSTT) Transcribe(_ []byte, _ int) (string, float64, error) {
+func (m mockSTT) Transcribe(_ []byte, _ int, _ []string) (string, float64, error) {
 	return m.text, 0.9, nil
 }
 

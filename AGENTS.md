@@ -1,28 +1,20 @@
 # AGENTS.md
 
-## Суть
+## Принцип (как speech-to-phrase)
 
-Один процесс `arc` на хосте Asterisk. **Без Docker.**
+Не open STT, а **распознавание из списка фраз** из `phrases.yaml`.
+Акустическая модель в `model/` (в Release). Грамматика — на лету из yaml.
 
-- AEAP WebSocket `:9099` ← Asterisk `SpeechCreate(response-classifier)`
-- STT: Vosk in-process (`-model /path`, build `-tags vosk`)
-- Классификация: `config/phrases.yaml` (hot-reload)
+## Release bundle
+
+`arc-linux-{amd64,arm64}.tar.gz` содержит: arc, libvosk.so, model/, config/, install.sh
 
 ## Запуск
 
-```bash
-LD_LIBRARY_PATH=/opt/asterisk-response-classifier/lib \
-  ./arc -port 9099 -config config/phrases.yaml -model /opt/.../model
+```
+LD_LIBRARY_PATH=./lib ./arc -model ./model -config ./config/phrases.yaml
 ```
 
-## Dialplan
+## Сборка
 
-`Gosub(yesno-ask,s,1(prompt))` → `GOSUB_RETVAL` = positive|negative|uncertain
-
-## Сборка с STT
-
-```bash
-go build -tags vosk -o arc ./cmd/arc
-```
-
-Без `-tags vosk` — только тесты/CI, STT не работает.
+`go build -tags vosk` — только для разработки; прод = tarball из CI.
