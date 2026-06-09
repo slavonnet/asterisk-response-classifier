@@ -1,0 +1,19 @@
+[Unit]
+Description=Asterisk Response Classifier (AEAP)
+After=network.target asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+User=asterisk
+Group=asterisk
+WorkingDirectory=/opt/asterisk-response-classifier
+ExecStart=/opt/asterisk-response-classifier/bin/arc -port 9099 -config config/phrases.yaml
+Restart=on-failure
+RestartSec=3
+
+# ONNX Runtime (when enabled)
+Environment=LD_LIBRARY_PATH=/opt/asterisk-response-classifier/lib
+
+[Install]
+WantedBy=multi-user.target

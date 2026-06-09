@@ -1,0 +1,63 @@
+# Phrases and decision tree for outbound IVR robot
+
+phrases:
+  min_confidence: 0.65
+  positive:
+    - "да"
+    - "конечно"
+    - "согласен"
+    - "хорошо"
+    - "давайте"
+    - "подтверждаю"
+  negative:
+    - "нет"
+    - "не надо"
+    - "отказываюсь"
+    - "не интересно"
+    - "не хочу"
+
+tree:
+  start: greeting
+  nodes:
+    - id: greeting
+      prompt: custom/greeting
+      timeout: 5
+      max_retry: 2
+      on:
+        positive: offer
+        negative: goodbye
+        uncertain: operator
+
+    - id: offer
+      prompt: custom/offer-details
+      timeout: 8
+      max_retry: 1
+      on:
+        positive: confirm
+        negative: goodbye
+        uncertain: operator
+
+    - id: confirm
+      prompt: custom/thank-you
+      on:
+        positive: hangup
+        negative: operator
+        uncertain: operator
+
+    - id: goodbye
+      prompt: custom/goodbye
+      on:
+        positive: hangup
+        negative: hangup
+        uncertain: hangup
+
+    - id: operator
+      prompt: custom/transfer-operator
+      on:
+        positive: hangup
+        negative: hangup
+        uncertain: hangup
+
+    - id: hangup
+      prompt: ""
+      on: {}
