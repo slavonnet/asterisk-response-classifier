@@ -6,37 +6,29 @@ import (
 	"testing"
 )
 
-func TestAllPhrases(t *testing.T) {
+func TestLoad(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "sentences.yaml")
-	content := `language: ru
-lists:
-  yes_word:
-    values:
-      - in: "да"
-  no_word:
-    values:
-      - in: "нет"
-intents:
-  Positive:
-    data:
-      - sentences: ["{yes_word}"]
-  Negative:
-    data:
-      - sentences: ["{no_word}"]
+	path := filepath.Join(dir, "ivr.yaml")
+	content := `
+speech_to_phrase: "tcp://127.0.0.1:10300"
+positive: ["да"]
+negative: ["нет"]
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := Load(path)
+	loader := NewLoader(path)
+	cfg, err := loader.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	phrases, labels := cfg.AllPhrases()
-	if len(phrases) != 2 {
-		t.Fatalf("phrases = %v", phrases)
+	if cfg.SpeechToPhrase != "tcp://127.0.0.1:10300" {
+		t.Fatalf("addr = %q", cfg.SpeechToPhrase)
 	}
-	if labels["да"] != "positive" || labels["нет"] != "negative" {
-		t.Fatalf("labels = %v", labels)
+	if loader.MapPhrase("да") != "positive" {
+		t.Fatal("expected positive")
+	}
+	if loader.MapPhrase("может") != "uncertain" {
+		t.Fatal("expected uncertain")
 	}
 }

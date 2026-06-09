@@ -9,14 +9,12 @@ lists:
       - in: "конечно"
       - in: "хорошо"
       - in: "ладно"
-      - in: "давайте"
   no_word:
     values:
       - in: "нет"
       - in: "неа"
       - in: "не надо"
       - in: "не хочу"
-      - in: "не интересно"
 
 intents:
   Positive:

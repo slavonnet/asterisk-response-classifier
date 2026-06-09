@@ -1,0 +1,15 @@
+[Unit]
+Description=speech-to-phrase (Wyoming ASR)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/asterisk-response-classifier
+Environment=HASS_TOKEN=REPLACE_ME
+Environment=HASS_WS=ws://127.0.0.1:8123/api/websocket
+ExecStart=/opt/asterisk-response-classifier/scripts/run-speech-to-phrase.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

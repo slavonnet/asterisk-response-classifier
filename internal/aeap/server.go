@@ -206,7 +206,7 @@ func (s *session) handleGet(req *aeapRequest) (map[string]interface{}, error) {
 			if len(s.audioBuf) > 0 {
 				r := s.cls.ProcessAudio(s.audioBuf)
 				s.results = append(s.results, speechResult{
-					Text:  string(r.Label),
+					Text:  r.Text,
 					Score: r.Score,
 				})
 				s.audioBuf = s.audioBuf[:0]

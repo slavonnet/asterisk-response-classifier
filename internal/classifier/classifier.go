@@ -3,54 +3,53 @@ package classifier
 import (
 	"log"
 
+	"github.com/slavonnet/asterisk-response-classifier/internal/audio"
 	"github.com/slavonnet/asterisk-response-classifier/internal/config"
-	"github.com/slavonnet/asterisk-response-classifier/internal/phrase"
+	"github.com/slavonnet/asterisk-response-classifier/internal/wyoming"
 )
 
 type Classifier interface {
 	ProcessAudio(ulaw []byte) Result
 }
 
-type Label string
-
-const (
-	Positive  Label = "positive"
-	Negative  Label = "negative"
-	Uncertain Label = "uncertain"
-)
-
 type Result struct {
 	Text  string
 	Score float64
-	Label Label
-	Heard string // matched phrase (debug)
+	Label string
+	Heard string
 }
 
 type Service struct {
 	loader *config.Loader
-	phrase *phrase.Engine
 }
 
-func NewService(loader *config.Loader, pe *phrase.Engine) *Service {
-	return &Service{loader: loader, phrase: pe}
+func NewService(loader *config.Loader) *Service {
+	return &Service{loader: loader}
 }
 
 func (s *Service) ProcessAudio(ulaw []byte) Result {
 	cfg, err := s.loader.Load()
 	if err != nil {
 		log.Printf("config: %v", err)
-		return uncertain(0, "")
+		return Result{Text: "uncertain", Label: "uncertain"}
 	}
-	label, heard, score := s.phrase.Recognize(ulaw, cfg)
-	log.Printf("phrase=%q → %s (%.0f)", heard, label, score)
-	return Result{
-		Text:  label,
-		Score: score,
-		Label: Label(label),
-		Heard: heard,
+	if len(ulaw) == 0 {
+		return Result{Text: "uncertain", Label: "uncertain"}
 	}
-}
 
-func uncertain(score float64, heard string) Result {
-	return Result{Text: "uncertain", Score: score, Label: Uncertain, Heard: heard}
+	pcm8 := audio.DecodeULaw(ulaw)
+	pcm16 := wyoming.Upsample8kTo16k(pcm8)
+
+	heard, err := wyoming.Transcribe(cfg.SpeechToPhrase, pcm16)
+	if err != nil {
+		log.Printf("speech-to-phrase: %v", err)
+		return Result{Text: "uncertain", Label: "uncertain"}
+	}
+	if heard == "" {
+		return Result{Text: "uncertain", Label: "uncertain"}
+	}
+
+	label := s.loader.MapPhrase(heard)
+	log.Printf("stp=%q → %s", heard, label)
+	return Result{Text: label, Label: label, Heard: heard, Score: 90}
 }

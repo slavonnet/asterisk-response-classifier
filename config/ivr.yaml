@@ -1,0 +1,18 @@
+# arc → speech-to-phrase (Wyoming). Без Vosk, без ASR.
+
+speech_to_phrase: "tcp://127.0.0.1:10300"
+language: ru
+
+# STP вернёт одну из фраз из config/sentences/ru/ivr.yaml → маппинг в dialplan
+positive:
+  - "да"
+  - "ага"
+  - "угу"
+  - "конечно"
+  - "хорошо"
+  - "ладно"
+negative:
+  - "нет"
+  - "неа"
+  - "не надо"
+  - "не хочу"

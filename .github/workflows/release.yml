@@ -8,60 +8,40 @@ on:
 permissions:
   contents: write
 
-env:
-  VOSK_MODEL_URL: https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
-  VOSK_VER: "0.3.45"
-
 jobs:
   release:
     strategy:
       matrix:
         include:
-          - runner: ubuntu-latest
-            vosk_arch: x86_64
+          - goos: linux
+            goarch: amd64
             asset: arc-linux-amd64
-          - runner: ubuntu-24.04-arm
-            vosk_arch: aarch64
+          - goos: linux
+            goarch: arm64
             asset: arc-linux-arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: libvosk + acoustic model (всё в tarball)
-        env:
-          VOSK_ARCH: ${{ matrix.vosk_arch }}
-        run: |
-          curl -fsSL "https://github.com/alphacep/vosk-api/releases/download/v${VOSK_VER}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}.zip" -o vosk.zip
-          unzip vosk.zip
-          echo "VOSK_DIR=${{ github.workspace }}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}" >> "$GITHUB_ENV"
-          curl -fsSL "$VOSK_MODEL_URL" -o model.zip
-          unzip -q model.zip
-          mv vosk-model-small-ru-0.22 model
-
       - run: go test -count=1 ./...
-
       - name: Build
         env:
-          CGO_ENABLED: "1"
-          CGO_CPPFLAGS: -I${{ env.VOSK_DIR }}
-          CGO_LDFLAGS: -L${{ env.VOSK_DIR }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
           VERSION: ${{ github.ref_name }}
         run: |
-          go mod tidy
-          go build -tags phrase -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o arc ./cmd/arc
-          mkdir -p bundle/{lib,config,model}
-          cp arc bundle/arc
-          cp "${VOSK_DIR}/libvosk.so" bundle/lib/
-          cp -r model/* bundle/model/
-          cp config/sentences.yaml bundle/config/
-          cp deploy/arc.service scripts/install-from-release.sh bundle/
-          chmod +x bundle/install-from-release.sh
-          mv bundle/install-from-release.sh bundle/install.sh
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o arc ./cmd/arc
+          mkdir -p bundle/config/sentences/ru bundle/deploy bundle/scripts
+          cp arc bundle/
+          cp config/ivr.yaml bundle/config/
+          cp config/sentences/ru/ivr.yaml bundle/config/sentences/ru/
+          cp deploy/*.service bundle/deploy/
+          cp scripts/run-speech-to-phrase.sh bundle/scripts/
+          chmod +x bundle/scripts/run-speech-to-phrase.sh
           tar -czf ${{ matrix.asset }}.tar.gz -C bundle .
-
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}

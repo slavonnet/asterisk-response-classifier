@@ -2,45 +2,24 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Sentences — как custom sentences в speech-to-phrase (ограниченный набор фраз).
-type Sentences struct {
-	Language string            `yaml:"language"`
-	Lists    map[string]List   `yaml:"lists"`
-	Intents  map[string]Intent `yaml:"intents"`
-}
-
-type List struct {
-	Values []ListValue `yaml:"values"`
-}
-
-type ListValue struct {
-	In  string `yaml:"in"`
-	Out string `yaml:"out"`
-}
-
-type Intent struct {
-	Data []IntentData `yaml:"data"`
-}
-
-type IntentData struct {
-	Sentences []string `yaml:"sentences"`
-}
-
 type Config struct {
-	Sentences Sentences
-	path      string
+	SpeechToPhrase string   `yaml:"speech_to_phrase"` // tcp://127.0.0.1:10300
+	Language       string   `yaml:"language"`
+	Positive       []string `yaml:"positive"`
+	Negative       []string `yaml:"negative"`
 }
 
 type Loader struct {
 	path string
 	mu   sync.Mutex
+	pos  map[string]bool
+	neg  map[string]bool
 }
 
 func NewLoader(path string) *Loader {
@@ -50,77 +29,53 @@ func NewLoader(path string) *Loader {
 func (l *Loader) Load() (*Config, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return Load(l.path)
-}
 
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(l.path)
 	if err != nil {
 		return nil, err
 	}
-	var s Sentences
-	if err := yaml.Unmarshal(data, &s); err != nil {
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
-	return &Config{Sentences: s, path: path}, nil
+	if cfg.SpeechToPhrase == "" {
+		cfg.SpeechToPhrase = "tcp://127.0.0.1:10300"
+	}
+	if cfg.Language == "" {
+		cfg.Language = "ru"
+	}
+	l.pos = toSet(cfg.Positive)
+	l.neg = toSet(cfg.Negative)
+	return &cfg, nil
 }
 
-func (c *Config) Dir() string { return filepath.Dir(c.path) }
-
-// AllPhrases returns every speakable phrase and its label (positive/negative).
-func (c *Config) AllPhrases() (phrases []string, labelOf map[string]string) {
-	labelOf = make(map[string]string)
-	seen := make(map[string]bool)
-
-	add := func(phrase, label string) {
-		phrase = strings.TrimSpace(phrase)
-		if phrase == "" || seen[phrase] {
-			return
-		}
-		seen[phrase] = true
-		phrases = append(phrases, phrase)
-		labelOf[norm(phrase)] = label
-	}
-
-	for intentName, intent := range c.Sentences.Intents {
-		label := intentLabel(intentName)
-		for _, d := range intent.Data {
-			for _, sent := range d.Sentences {
-				for _, p := range expand(sent, c.Sentences.Lists) {
-					add(p, label)
-				}
-			}
-		}
-	}
-	return phrases, labelOf
-}
-
-func intentLabel(name string) string {
-	switch strings.ToLower(name) {
-	case "positive":
+func (l *Loader) MapPhrase(heard string) string {
+	h := norm(heard)
+	if l.pos[h] {
 		return "positive"
-	case "negative":
-		return "negative"
-	default:
-		return strings.ToLower(name)
 	}
-}
-
-func expand(tmpl string, lists map[string]List) []string {
-	tmpl = strings.TrimSpace(tmpl)
-	if strings.HasPrefix(tmpl, "{") && strings.HasSuffix(tmpl, "}") {
-		key := tmpl[1 : len(tmpl)-1]
-		if list, ok := lists[key]; ok {
-			out := make([]string, 0, len(list.Values))
-			for _, v := range list.Values {
-				if v.In != "" {
-					out = append(out, v.In)
-				}
-			}
-			return out
+	if l.neg[h] {
+		return "negative"
+	}
+	for p := range l.pos {
+		if strings.Contains(h, p) {
+			return "positive"
 		}
 	}
-	return []string{tmpl}
+	for n := range l.neg {
+		if strings.Contains(h, n) {
+			return "negative"
+		}
+	}
+	return "uncertain"
+}
+
+func toSet(items []string) map[string]bool {
+	m := make(map[string]bool, len(items))
+	for _, s := range items {
+		m[norm(s)] = true
+	}
+	return m
 }
 
 func norm(s string) string { return strings.ToLower(strings.TrimSpace(s)) }

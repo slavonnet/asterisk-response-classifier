@@ -1,9 +1,8 @@
 # AGENTS.md
 
-Phrase-limited recognition как speech-to-phrase. Не ASR.
+arc = AEAP → Wyoming → **speech-to-phrase**. Не заменять STP на Vosk/ASR.
 
-- `config/sentences.yaml` — lists + intents (формат как STP custom sentences)
-- `arc` + `-model model/` — acoustic model в Release
-- AEAP → `positive|negative|uncertain`
-
-Сборка: `go build -tags phrase`
+- STP: `scripts/run-speech-to-phrase.sh` (tcp://10300)
+- arc: `./arc -config config/ivr.yaml`
+- Фразы STP: `config/sentences/ru/ivr.yaml`
+- Маппинг: `config/ivr.yaml` positive/negative

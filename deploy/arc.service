@@ -1,14 +1,14 @@
 [Unit]
-Description=Asterisk phrase classifier (speech-to-phrase style)
-After=network.target asterisk.service
+Description=arc AEAP bridge to speech-to-phrase
+After=network.target speech-to-phrase.service
+Requires=speech-to-phrase.service
 
 [Service]
 Type=simple
 User=asterisk
 Group=asterisk
-WorkingDirectory=INSTALL_DIR
-Environment=LD_LIBRARY_PATH=INSTALL_DIR/lib
-ExecStart=INSTALL_DIR/arc -port 9099 -config INSTALL_DIR/config/sentences.yaml -model INSTALL_DIR/model
+WorkingDirectory=/opt/asterisk-response-classifier
+ExecStart=/opt/asterisk-response-classifier/arc -port 9099 -config /opt/asterisk-response-classifier/config/ivr.yaml
 Restart=on-failure
 
 [Install]
