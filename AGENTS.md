@@ -1,18 +1,9 @@
 # AGENTS.md
 
-## Задача
+Phrase-limited recognition как speech-to-phrase. Не ASR.
 
-Короткий ulaw от Asterisk → `positive` | `negative` | `uncertain`.  
-**Без STT.** Сходство звука с эталонами в `config/references.yaml`.
+- `config/sentences.yaml` — lists + intents (формат как STP custom sentences)
+- `arc` + `-model model/` — acoustic model в Release
+- AEAP → `positive|negative|uncertain`
 
-## Не делать
-
-- STT / Vosk / Docker / текстовые фразы / ASR в этом сервисе
-
-## Запуск
-
-`./arc -port 9099 -config config/references.yaml`
-
-## Эталоны
-
-ulaw 8 kHz в `config/refs/`. Hot-reload yaml на каждый ответ.
+Сборка: `go build -tags phrase`

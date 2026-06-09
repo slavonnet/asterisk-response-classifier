@@ -1,0 +1,29 @@
+language: "ru"
+
+lists:
+  yes_word:
+    values:
+      - in: "да"
+      - in: "ага"
+      - in: "угу"
+      - in: "конечно"
+      - in: "хорошо"
+      - in: "ладно"
+      - in: "давайте"
+  no_word:
+    values:
+      - in: "нет"
+      - in: "неа"
+      - in: "не надо"
+      - in: "не хочу"
+      - in: "не интересно"
+
+intents:
+  Positive:
+    data:
+      - sentences:
+          - "{yes_word}"
+  Negative:
+    data:
+      - sentences:
+          - "{no_word}"

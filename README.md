@@ -1,41 +1,33 @@
 # asterisk-response-classifier
 
-[![CI](https://github.com/slavonnet/asterisk-response-classifier/actions/workflows/ci.yml/badge.svg)](https://github.com/slavonnet/asterisk-response-classifier/actions/workflows/ci.yml)
+Классификатор коротких ответов для Asterisk — **как [speech-to-phrase](https://github.com/OHF-voice/speech-to-phrase)**:
 
-**Простой** классификатор коротких ответов для Asterisk: `positive` | `negative` | `uncertain`.
+> не «что человек сказал вообще», а **«какая из известных фраз»**
 
-## Без STT / ASR / текста
-
-Короткие «да» и «нет» в текст **не переводим** — так точность будет низкой.
-
-Сравниваем **звук ответа** с **эталонными ulaw-записями** (cosine similarity по акустическим признакам).  
-ASR прикрутите сами отдельно, если понадобится полный текст.
+- `positive` / `negative` / `uncertain` → dialplan
+- Конфиг `config/sentences.yaml` — тот же принцип, что custom sentences у speech-to-phrase
+- Меняете список фraz → на следующем ответе новая грамматика (без переобучения на сервере)
+- **Release tarball**: `arc` + `model/` + `libvosk.so` + `sentences.yaml` — распаковал и работает
 
 ## Установка
 
 ```bash
-# из Releases
-sudo bash install.sh arc-linux-amd64.tar.gz
+sudo bash install.sh arc-linux-arm64.tar.gz
 ```
 
-```bash
-./arc -port 9099 -config config/references.yaml
-```
-
-## Эталоны
-
-`config/references.yaml`:
+## Конфиг (как speech-to-phrase)
 
 ```yaml
-references:
-  positive:
-    - refs/positive/da.ulaw
-  negative:
-    - refs/negative/net.ulaw
+lists:
+  yes_word:
+    values:
+      - in: "да"
+      - in: "ага"
+intents:
+  Positive:
+    data:
+      - sentences: ["{yes_word}"]
 ```
-
-Запишите ulaw 8 kHz **с вашей линии** — как реально звучат «да» и «нет» у абонентов.  
-Несколько вариантов в каждой группе. Файл перечитывается на каждый ответ.
 
 ## Asterisk
 
@@ -46,9 +38,7 @@ Gosub(yesno-ask,s,1(custom/вопрос))
 GotoIf($["${GOSUB_RETVAL}" = "uncertain"]?operator)
 ```
 
-## ONNX позже
-
-Флаг `-onnx-model` можно добавить для нейросетевого эмбеддинга — сейчас достаточно эталонов.
+ASR для полного текста — отдельно, сюда не входит.
 
 ## Releases
 

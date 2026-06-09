@@ -11,85 +11,74 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/slavonnet/asterisk-response-classifier/internal/audio"
 	"github.com/slavonnet/asterisk-response-classifier/internal/classifier"
 	"github.com/slavonnet/asterisk-response-classifier/internal/config"
+	"github.com/slavonnet/asterisk-response-classifier/internal/phrase"
 )
 
-func testClassifier(t *testing.T) classifier.Classifier {
+func testService(t *testing.T) classifier.Classifier {
 	t.Helper()
 	dir := t.TempDir()
-	pos := make([]int16, 1000)
-	for i := range pos {
-		pos[i] = 2000
-	}
-	neg := make([]int16, 3000)
-	for i := range neg {
-		neg[i] = int16(i % 500)
-	}
-	_ = os.MkdirAll(filepath.Join(dir, "refs"), 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "refs/p.ulaw"), audio.EncodeULaw(pos), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "refs/n.ulaw"), audio.EncodeULaw(neg), 0o644)
-	cfgPath := filepath.Join(dir, "references.yaml")
-	_ = os.WriteFile(cfgPath, []byte(`references:
-  positive: ["refs/p.ulaw"]
-  negative: ["refs/n.ulaw"]
+	cfgPath := filepath.Join(dir, "sentences.yaml")
+	_ = os.WriteFile(cfgPath, []byte(`language: ru
+lists:
+  yes_word:
+    values: [{in: "да"}]
+  no_word:
+    values: [{in: "нет"}]
+intents:
+  Positive:
+    data: [{sentences: ["{yes_word}"]}]
+  Negative:
+    data: [{sentences: ["{no_word}"]}]
 `), 0o644)
-	return classifier.NewSimilarityClassifier(config.NewLoader(cfgPath))
+	pe, _ := phrase.New("")
+	return classifier.NewService(config.NewLoader(cfgPath), pe)
 }
 
 func TestSetupHandshake(t *testing.T) {
-	srv := NewServer(0, testClassifier(t))
+	srv := NewServer(0, testService(t))
 	ts := httptest.NewServer(http.HandlerFunc(srv.handleWS))
 	defer ts.Close()
-
 	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-
 	_ = conn.WriteJSON(map[string]interface{}{
 		"request": "setup", "id": "1", "version": aeapVersion,
 		"codecs": []map[string]string{{"name": "ulaw"}},
 	})
 	var resp aeapResponse
-	if err := conn.ReadJSON(&resp); err != nil {
-		t.Fatal(err)
-	}
+	_ = conn.ReadJSON(&resp)
 	if resp.Response != "setup" {
-		t.Fatalf("resp = %+v", resp)
+		t.Fatal(resp)
 	}
 }
 
 func TestGetResults(t *testing.T) {
-	srv := NewServer(0, testClassifier(t))
+	srv := NewServer(0, testService(t))
 	ts := httptest.NewServer(http.HandlerFunc(srv.handleWS))
 	defer ts.Close()
-
 	conn, _, _ := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http"), nil)
 	defer conn.Close()
-
 	_ = conn.WriteJSON(map[string]interface{}{
 		"request": "setup", "id": "1", "version": aeapVersion,
 		"codecs": []map[string]string{{"name": "ulaw"}},
 	})
 	var setup aeapResponse
 	_ = conn.ReadJSON(&setup)
-
-	_ = conn.WriteMessage(websocket.BinaryMessage, audio.EncodeULaw([]int16{1000, 1000, 1000}))
-
+	_ = conn.WriteMessage(websocket.BinaryMessage, []byte{0xff, 0x7f})
 	_ = conn.WriteJSON(map[string]interface{}{
 		"request": "get", "id": "2", "params": []string{"results"},
 	})
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	var getResp aeapResponse
 	_ = conn.ReadJSON(&getResp)
-
 	raw, _ := json.Marshal(getResp.Params["results"])
 	var results []speechResult
 	_ = json.Unmarshal(raw, &results)
-	if len(results) != 1 {
+	if len(results) != 1 || results[0].Text != "uncertain" {
 		t.Fatalf("results = %+v", results)
 	}
 }

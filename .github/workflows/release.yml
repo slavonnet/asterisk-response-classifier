@@ -8,42 +8,58 @@ on:
 permissions:
   contents: write
 
+env:
+  VOSK_MODEL_URL: https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+  VOSK_VER: "0.3.45"
+
 jobs:
   release:
     strategy:
       matrix:
         include:
-          - goos: linux
-            goarch: amd64
+          - runner: ubuntu-latest
+            vosk_arch: x86_64
             asset: arc-linux-amd64
-          - goos: linux
-            goarch: arm64
+          - runner: ubuntu-24.04-arm
+            vosk_arch: aarch64
             asset: arc-linux-arm64
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
+
+      - name: libvosk + acoustic model (всё в tarball)
+        env:
+          VOSK_ARCH: ${{ matrix.vosk_arch }}
+        run: |
+          curl -fsSL "https://github.com/alphacep/vosk-api/releases/download/v${VOSK_VER}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}.zip" -o vosk.zip
+          unzip vosk.zip
+          echo "VOSK_DIR=${{ github.workspace }}/vosk-linux-${VOSK_ARCH}-${VOSK_VER}" >> "$GITHUB_ENV"
+          curl -fsSL "$VOSK_MODEL_URL" -o model.zip
+          unzip -q model.zip
+          mv vosk-model-small-ru-0.22 model
 
       - run: go test -count=1 ./...
 
       - name: Build
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
+          CGO_ENABLED: "1"
+          CGO_CPPFLAGS: -I${{ env.VOSK_DIR }}
+          CGO_LDFLAGS: -L${{ env.VOSK_DIR }}
           VERSION: ${{ github.ref_name }}
         run: |
-          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o arc ./cmd/arc
-          mkdir -p bundle/config/refs
+          go mod tidy
+          go build -tags phrase -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o arc ./cmd/arc
+          mkdir -p bundle/{lib,config,model}
           cp arc bundle/arc
-          cp config/references.yaml bundle/config/
-          cp -r config/refs/README.md bundle/config/refs/
-          cp deploy/arc.service bundle/
-          cp scripts/install-from-release.sh bundle/install.sh
-          chmod +x bundle/arc bundle/install.sh
+          cp "${VOSK_DIR}/libvosk.so" bundle/lib/
+          cp -r model/* bundle/model/
+          cp config/sentences.yaml bundle/config/
+          cp deploy/arc.service scripts/install-from-release.sh bundle/
+          chmod +x bundle/install-from-release.sh
+          mv bundle/install-from-release.sh bundle/install.sh
           tar -czf ${{ matrix.asset }}.tar.gz -C bundle .
 
       - uses: actions/upload-artifact@v4
